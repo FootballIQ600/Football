@@ -26,7 +26,7 @@ jobs:
         run: python -m pip install pandas requests
 
       - name: Download football results
-        run: python Import_results.py
+        run: python import_results.py
 
       - name: Save updated CSV to GitHub
         run: |
