@@ -4,7 +4,9 @@ import requests
 from io import BytesIO
 from pathlib import Path
 
-# Football-data.co.uk season codes
+# Save the CSV in the same folder as this script.
+OUTPUT = Path(__file__).resolve().parent / "historical_results.csv"
+
 SEASONS = {
     "2025/26": "2526",
     "2026/27": "2627",
@@ -16,8 +18,6 @@ LEAGUES = {
     "League One": "E2",
     "League Two": "E3",
 }
-
-OUTPUT = Path("historical_results.csv")
 
 
 def download_results():
@@ -38,7 +38,8 @@ def download_results():
                 response.raise_for_status()
 
                 if not response.content.strip():
-                    print("  No data available yet.")
+                    print("  Download was empty.")
+                    failed_downloads.append(f"{league}, {season}")
                     continue
 
                 df = pd.read_csv(
@@ -47,10 +48,12 @@ def download_results():
                     on_bad_lines="skip",
                 )
 
-                required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"}
+                required = {
+                    "Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"
+                }
 
                 if not required.issubset(df.columns):
-                    print("  File does not contain the expected columns.")
+                    print("  Unexpected file format.")
                     failed_downloads.append(f"{league}, {season}")
                     continue
 
@@ -62,7 +65,6 @@ def download_results():
                 df["FTHG"] = pd.to_numeric(df["FTHG"], errors="coerce")
                 df["FTAG"] = pd.to_numeric(df["FTAG"], errors="coerce")
 
-                # Keep completed matches with valid full-time scores.
                 df = df.dropna(
                     subset=["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]
                 )
@@ -74,9 +76,15 @@ def download_results():
                 print(f"  Download failed: {exc}")
                 failed_downloads.append(f"{league}, {season}")
 
+    # Never replace the existing CSV if any download failed.
+    if failed_downloads:
+        print("\nSome downloads failed. Existing CSV has been preserved.")
+        for item in failed_downloads:
+            print(f"- {item}")
+        return
+
     if not all_matches:
-        print("\nNo historical results were downloaded.")
-        print("Check your internet connection and try again.")
+        print("\nNo results were downloaded. Existing CSV preserved.")
         return
 
     results = pd.concat(all_matches, ignore_index=True)
@@ -89,26 +97,7 @@ def download_results():
 
     print("\nImport complete!")
     print(f"Total completed matches: {len(results)}")
-    print(f"Date range: {results['Date'].min().date()} "
-          f"to {results['Date'].max().date()}")
-    print(f"Saved to: {OUTPUT.resolve()}")
-
-    print("\nMatches by competition and season:")
-    print(
-        results.groupby(["Season", "Competition"])
-        .size()
-        .to_string()
-    )
-
-    if failed_downloads:
-        print("\nDownloads to check:")
-        for item in failed_downloads:
-            print(f"- {item}")
-
-    print(
-        "\nNote: a season may have no data yet or be incomplete. "
-        "Check the source before treating missing matches as errors."
-    )
+    print(f"Saved to: {OUTPUT}")
 
 
 if __name__ == "__main__":
